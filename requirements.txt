@@ -1,0 +1,5 @@
+# Creates Excel inventory workbooks.
+openpyxl
+
+# Packages the desktop application as a Windows executable.
+PyInstaller

@@ -39,6 +39,12 @@ The `.xlsx` file in a part folder that lists that folder's PDFs and their
 document names.
 _Avoid_: Spreadsheet, Excel list
 
+**Document name**:
+The human-readable label recorded for a PDF in an Excel inventory, resolved
+from that PDF's filename. It is distinct from the PDF filename and the Batch
+name.
+_Avoid_: Abbreviation, PDF filename, batch name
+
 **Output conflict**:
 An existing file or folder at a path the plan will write, requiring the user to
 cancel or give Replace confirmation before anything is written.

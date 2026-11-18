@@ -1,5 +1,5 @@
 # Creates Excel inventory workbooks.
-openpyxl
+openpyxl==3.1.5
 
 # Packages the desktop application as a Windows executable.
-PyInstaller
+PyInstaller==6.22.3

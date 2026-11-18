@@ -4,6 +4,16 @@ Terms for the document-batching workflow and its generated deliverables.
 
 ## Language
 
+**Source folder**:
+The existing folder whose top-level PDFs are read into a batch plan; its PDFs are
+never moved, renamed, or modified.
+_Avoid_: Input folder, origin folder
+
+**Destination folder**:
+The existing folder under which part folders are created; it must be distinct
+from, and not nested with, the source folder.
+_Avoid_: Output folder, target folder
+
 **Batch name**:
 The user-supplied label normalized to uppercase and used as the prefix of all
 generated part folders.

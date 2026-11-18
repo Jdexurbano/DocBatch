@@ -1,4 +1,4 @@
-# DocBacth
+# DocBatch
 
 Planning workspace for a Windows desktop application that organizes PDF files
 into upload-sized folders and creates an Excel inventory for every folder.
@@ -11,6 +11,9 @@ behavioral reference until the application is implemented.
 
 ## Development environment
 
+The foundation is verified with Python 3.14.2 (3.14.x); no other Python versions
+are claimed as supported.
+
 Use a virtual environment for every local installation so project packages do
 not affect the system Python installation:
 
@@ -22,6 +25,15 @@ python -m pip install -r requirements.txt
 
 Run `deactivate` when finished. Re-activate `.venv` before installing packages
 or running project tools.
+
+## Tests
+
+With the virtual environment active, run the single test command from the
+repository root:
+
+```powershell
+python -m unittest discover -s tests -v
+```
 
 ## Dependencies
 

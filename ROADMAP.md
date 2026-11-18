@@ -1,4 +1,4 @@
-# DocBacth Roadmap
+# DocBatch Roadmap
 
 ## Release scope
 

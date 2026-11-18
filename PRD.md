@@ -1,4 +1,4 @@
-# Product Requirements Document: DocBacth
+# Product Requirements Document: DocBatch
 
 ## 1. Product summary
 

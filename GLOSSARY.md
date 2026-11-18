@@ -1,4 +1,4 @@
-# DocBacth
+# DocBatch
 
 Terms for the document-batching workflow and its generated deliverables.
 

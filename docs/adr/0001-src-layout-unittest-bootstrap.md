@@ -7,6 +7,6 @@ standard-library `unittest`; `tests/__init__.py` prepends `src/` to `sys.path` s
 `python -m unittest discover -s tests -v` works without a `pyproject.toml` or an
 editable install. We rejected adding a `pyproject.toml` and installing the package
 in editable mode because that would introduce build tooling during the foundation
-phase. The trade-off is a small path shim that every test relies on; revisit this
-decision during the Windows release phase (Phase 6) when packaging tooling is
-introduced.
+phase. The trade-off is a small path shim that every test relies on. The revisit during
+the Windows release phase concluded that no build backend is needed; see ADR
+0005.

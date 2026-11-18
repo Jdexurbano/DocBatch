@@ -54,3 +54,13 @@ _Avoid_: Silent overwrite, collision
 The explicit approval that lets generation replace Output conflicts; without
 it, a run with conflicts is cancelled and writes nothing.
 _Avoid_: Overwrite flag, force option
+
+**Review summary**:
+The pre-processing display of PDF count, total size, destination, and any
+applicable overwrite warning that the user must confirm before processing starts.
+_Avoid_: Confirmation screen, preview panel
+
+**Completion summary**:
+The post-processing report of generated part folders, their sizes, skipped files,
+and errors, naming each affected file or folder.
+_Avoid_: Results window, final report

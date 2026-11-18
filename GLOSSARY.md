@@ -40,6 +40,11 @@ document names.
 _Avoid_: Spreadsheet, Excel list
 
 **Output conflict**:
-An existing destination file or folder that would be replaced by planned
-output, requiring the user to cancel or explicitly confirm replacement.
-_Avoid_: Silent overwrite
+An existing file or folder at a path the plan will write, requiring the user to
+cancel or give Replace confirmation before anything is written.
+_Avoid_: Silent overwrite, collision
+
+**Replace confirmation**:
+The explicit approval that lets generation replace Output conflicts; without
+it, a run with conflicts is cancelled and writes nothing.
+_Avoid_: Overwrite flag, force option

@@ -41,6 +41,37 @@ def _discover_pdfs(source: Path):
     return tuple(pdfs), tuple(errors), bool(candidates)
 
 
+def _pack_pdfs(pdfs, batch_name, destination, max_size_bytes):
+    groups = []
+    current_pdfs = []
+    current_total_bytes = 0
+    for pdf in pdfs:
+        if current_pdfs and current_total_bytes + pdf.size_bytes > max_size_bytes:
+            groups.append((current_pdfs, current_total_bytes))
+            current_pdfs = []
+            current_total_bytes = 0
+        current_pdfs.append(pdf)
+        current_total_bytes += pdf.size_bytes
+    if current_pdfs:
+        groups.append((current_pdfs, current_total_bytes))
+
+    parts = []
+    for index, (group_pdfs, group_total_bytes) in enumerate(groups, start=1):
+        name = f"{batch_name} PART_{index:03d}"
+        parts.append(
+            PartFolder(
+                name=name,
+                path=destination / name,
+                pdfs=tuple(group_pdfs),
+                total_size_bytes=group_total_bytes,
+                has_oversized_pdf=any(
+                    pdf.size_bytes > max_size_bytes for pdf in group_pdfs
+                ),
+            )
+        )
+    return tuple(parts)
+
+
 def build_plan(
     source: Path | str,
     destination: Path | str,
@@ -64,18 +95,14 @@ def build_plan(
     if errors:
         raise PlanValidationError(errors)
 
-    part_name = f"{inputs.batch_name} PART_001"
-    part = PartFolder(
-        name=part_name,
-        path=inputs.destination / part_name,
-        pdfs=pdfs,
-        total_size_bytes=sum(pdf.size_bytes for pdf in pdfs),
-    )
+    max_size_bytes = int(inputs.max_size_mb * MEGABYTE_BYTES)
 
     return BatchPlan(
         batch_name=inputs.batch_name,
         source=inputs.source,
         destination=inputs.destination,
-        max_size_bytes=int(inputs.max_size_mb * MEGABYTE_BYTES),
-        part_folders=(part,),
+        max_size_bytes=max_size_bytes,
+        part_folders=_pack_pdfs(
+            pdfs, inputs.batch_name, inputs.destination, max_size_bytes
+        ),
     )

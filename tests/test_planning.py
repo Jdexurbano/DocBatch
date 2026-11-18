@@ -26,6 +26,17 @@ class BuildPlanTests(unittest.TestCase):
             for folder in folders
         }
 
+    def describe_parts(self, plan):
+        return [
+            (
+                part.name,
+                [(pdf.filename, pdf.size_bytes) for pdf in part.pdfs],
+                part.total_size_bytes,
+                part.has_oversized_pdf,
+            )
+            for part in plan.part_folders
+        ]
+
     def test_build_plan_returns_normalized_part_folder_name(self):
         source, destination = self.create_plan_fixture({"alpha.pdf": 10})
 
@@ -51,6 +62,127 @@ class BuildPlanTests(unittest.TestCase):
         self.assertEqual(
             part.path, destination.resolve() / "BOOK 53 AUGUST PART_001"
         )
+
+    def test_ordinary_pdfs_are_packed_with_next_fit_in_discovery_order(self):
+        source, destination = self.create_plan_fixture(
+            {"c.pdf": 400, "b.pdf": 600, "a.pdf": 600}
+        )
+
+        plan = build_plan(source, destination, "book 53 august", 1 / 1024)
+
+        self.assertEqual(
+            self.describe_parts(plan),
+            [
+                ("BOOK 53 AUGUST PART_001", [("a.pdf", 600)], 600, False),
+                (
+                    "BOOK 53 AUGUST PART_002",
+                    [("b.pdf", 600), ("c.pdf", 400)],
+                    1000,
+                    False,
+                ),
+            ],
+        )
+
+    def test_exact_limit_is_ordinary_and_one_byte_over_is_flagged(self):
+        source, destination = self.create_plan_fixture(
+            {"a-exact.pdf": 1024, "b-over.pdf": 1025}
+        )
+
+        plan = build_plan(source, destination, "book 53 august", 1 / 1024)
+
+        self.assertEqual(
+            self.describe_parts(plan),
+            [
+                (
+                    "BOOK 53 AUGUST PART_001",
+                    [("a-exact.pdf", 1024)],
+                    1024,
+                    False,
+                ),
+                (
+                    "BOOK 53 AUGUST PART_002",
+                    [("b-over.pdf", 1025)],
+                    1025,
+                    True,
+                ),
+            ],
+        )
+
+    def test_oversized_pdf_is_placed_inline_between_fresh_parts(self):
+        source, destination = self.create_plan_fixture(
+            {
+                "a-small.pdf": 600,
+                "b-huge.pdf": 2000,
+                "c-small.pdf": 500,
+                "d-small.pdf": 500,
+            }
+        )
+
+        plan = build_plan(source, destination, "book 53 august", 1 / 1024)
+
+        self.assertEqual(
+            self.describe_parts(plan),
+            [
+                (
+                    "BOOK 53 AUGUST PART_001",
+                    [("a-small.pdf", 600)],
+                    600,
+                    False,
+                ),
+                (
+                    "BOOK 53 AUGUST PART_002",
+                    [("b-huge.pdf", 2000)],
+                    2000,
+                    True,
+                ),
+                (
+                    "BOOK 53 AUGUST PART_003",
+                    [("c-small.pdf", 500), ("d-small.pdf", 500)],
+                    1000,
+                    False,
+                ),
+            ],
+        )
+
+    def test_first_pdf_oversized_does_not_create_an_empty_part(self):
+        source, destination = self.create_plan_fixture(
+            {"a-huge.pdf": 2000, "b-small.pdf": 100}
+        )
+
+        plan = build_plan(source, destination, "book 53 august", 1 / 1024)
+
+        self.assertEqual(
+            self.describe_parts(plan),
+            [
+                (
+                    "BOOK 53 AUGUST PART_001",
+                    [("a-huge.pdf", 2000)],
+                    2000,
+                    True,
+                ),
+                (
+                    "BOOK 53 AUGUST PART_002",
+                    [("b-small.pdf", 100)],
+                    100,
+                    False,
+                ),
+            ],
+        )
+
+    def test_part_numbers_are_gapless_and_expand_past_999(self):
+        pdf_sizes = {f"p{index:04d}.pdf": 1 for index in range(1001)}
+        source, destination = self.create_plan_fixture(pdf_sizes)
+
+        plan = build_plan(source, destination, "book 53 august", 1 / (1024 * 1024))
+
+        self.assertEqual(
+            [part.name for part in plan.part_folders],
+            [
+                f"BOOK 53 AUGUST PART_{index:03d}"
+                for index in range(1, 1002)
+            ],
+        )
+        self.assertTrue(all(part.pdfs for part in plan.part_folders))
 
     def test_plan_exposes_resolved_folders_and_default_part_size_limit(self):
         source, destination = self.create_plan_fixture({"alpha.pdf": 10})

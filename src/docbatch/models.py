@@ -14,6 +14,7 @@ class PartFolder:
     path: Path
     pdfs: tuple[PlannedPDF, ...]
     total_size_bytes: int
+    has_oversized_pdf: bool
 
 
 @dataclass(frozen=True)

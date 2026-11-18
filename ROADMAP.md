@@ -46,19 +46,27 @@ as `<part folder name>.xlsx`.
 **Done when:** tests verify worksheet names, numbering, mapping behavior,
 fallback names, and one workbook per generated folder.
 
-## Phase 5: Guided desktop workflow
+## Phase 5: Guided desktop workflow and Windows release
 
-Build the `tkinter` screen: source and destination pickers, batch name,
-editable size limit, live folder-name preview, review summary, confirmation,
-progress, errors, and an option to open the destination folder.
+Add a testable orchestration service that composes planning, safe generation,
+and Excel inventory creation and requires explicit confirmation before any
+write. Build the `tkinter` view around it with source and destination pickers,
+batch name, editable size limit, live folder-name preview, **Review summary**,
+**Completion summary**, progress, errors, and a button that opens the
+destination folder; run the batch on a worker thread and poll progress with Tk
+`after()`. Unit-test the service and pure view helpers with `unittest`, and keep
+actual UI interaction on a manual checklist.
 
-**Done when:** a user can complete the PRD workflow without entering file
-paths manually or using the command line.
+Package the application with PyInstaller in one-folder mode and author an Inno
+Setup script that installs `DocBatch` 1.0.0 per user under
+`%LOCALAPPDATA%\Programs\DocBatch` with Start Menu and Desktop shortcuts and an
+uninstall entry; re-installing never touches user source or destination folders.
+Inno Setup is a documented build prerequisite. Deliver `OPERATOR-GUIDE.md` and
+validate on a clean Windows machine without Python using generated sample PDFs,
+including `54_Name of the file.pdf` and one oversized PDF, with a signed-off
+checklist against every PRD acceptance criterion and completion-summary
+screenshots.
 
-## Phase 6: Windows release
-
-Build the application with PyInstaller and package it in an Inno Setup
-installer with an uninstall entry. Validate installation and processing on a
-Windows computer without a separate Python installation.
-
-**Done when:** the installed application meets every PRD acceptance criterion.
+**Done when:** the installed application completes the PRD workflow on a Windows
+computer without a separate Python installation, without manual path entry or
+the command line, and meets every PRD acceptance criterion.

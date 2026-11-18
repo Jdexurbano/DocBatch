@@ -4,8 +4,10 @@ from dataclasses import FrozenInstanceError
 
 import tests
 from docbatch.generation import (
+    CopyFailure,
     GeneratedPartFolder,
     GenerationResult,
+    ReplacedPartFolder,
     detect_conflicts,
     generate_output,
 )
@@ -109,6 +111,170 @@ class GenerateOutputTests(PlanTestCase):
 
         self.assertTrue(second.cancelled)
         self.assertEqual(self.folders.snapshot(self.folders.destination), destination_before)
+
+    def test_replace_confirmation_recreates_only_conflicting_part_folders(self):
+        plan = self.plan({"a.pdf": 600, "b.pdf": 600}, max_size_mb=1 / 1024)
+        conflicting = self.folders.destination / PART_ONE
+        conflicting.mkdir()
+        (conflicting / "stale.pdf").write_bytes(b"old " * 10)
+        (conflicting / "notes.txt").write_text("inside")
+        stale = self.folders.destination / "OLD BATCH PART_001"
+        stale.mkdir()
+        (stale / "old.pdf").write_bytes(b"old")
+        (self.folders.destination / "notes.txt").write_text("outside")
+        source_before = self.folders.snapshot(self.folders.source)
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertFalse(result.cancelled)
+        self.assertEqual(sorted(item.name for item in conflicting.iterdir()), ["a.pdf"])
+        self.assertEqual(
+            sorted(item.name for item in (self.folders.destination / PART_TWO).iterdir()),
+            ["b.pdf"],
+        )
+        self.assertEqual((self.folders.destination / "notes.txt").read_text(), "outside")
+        self.assertEqual(sorted(item.name for item in stale.iterdir()), ["old.pdf"])
+        self.assertEqual((stale / "old.pdf").read_bytes(), b"old")
+        self.assertEqual(self.folders.snapshot(self.folders.source), source_before)
+
+    def test_replace_confirmation_removes_file_occupying_planned_part_folder_path(self):
+        plan = self.plan({"alpha.pdf": 10})
+        (self.folders.destination / PART_ONE).write_bytes(b"occupied")
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertFalse(result.cancelled)
+        self.assertEqual(
+            sorted(item.name for item in (self.folders.destination / PART_ONE).iterdir()),
+            ["alpha.pdf"],
+        )
+
+    def test_unreadable_pdf_is_reported_and_remaining_pdfs_are_still_copied(self):
+        plan = self.plan({"a.pdf": 10, "b.pdf": 20, "c.pdf": 30})
+        (self.folders.source / "b.pdf").unlink()
+        source_before = self.folders.snapshot(self.folders.source)
+
+        result = generate_output(plan)
+
+        self.assertFalse(result.cancelled)
+        self.assertEqual(len(result.copy_failures), 1)
+        self.assertEqual(result.copy_failures[0].filename, "b.pdf")
+        self.assertTrue(result.copy_failures[0].reason)
+        self.assertEqual(result.copied_pdf_count, 2)
+        self.assertEqual(result.output_conflicts, ())
+        part_folder = self.folders.destination / PART_ONE
+        self.assertEqual(sorted(item.name for item in part_folder.iterdir()), ["a.pdf", "c.pdf"])
+        self.assertEqual((part_folder / "a.pdf").read_bytes(), b"\x00" * 10)
+        self.assertEqual((part_folder / "c.pdf").read_bytes(), b"\x00" * 30)
+        self.assertEqual(self.folders.snapshot(self.folders.source), source_before)
+
+    def test_failure_during_replacement_preserves_completed_copies_and_distinct_fields(self):
+        plan = self.plan({"a.pdf": 600, "b.pdf": 600}, max_size_mb=1 / 1024)
+        conflicting = self.folders.destination / PART_ONE
+        conflicting.mkdir()
+        (conflicting / "stale.pdf").write_bytes(b"old")
+        (self.folders.source / "a.pdf").unlink()
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertFalse(result.cancelled)
+        self.assertEqual(sorted(item.name for item in conflicting.iterdir()), [])
+        self.assertEqual(
+            sorted(item.name for item in (self.folders.destination / PART_TWO).iterdir()),
+            ["b.pdf"],
+        )
+        self.assertEqual(
+            [(conflict.kind, conflict.name) for conflict in result.output_conflicts],
+            [("part_folder", PART_ONE)],
+        )
+        self.assertEqual(
+            [folder.name for folder in result.replaced_part_folders], [PART_ONE]
+        )
+        self.assertEqual([failure.filename for failure in result.copy_failures], ["a.pdf"])
+        self.assertEqual(result.copied_pdf_count, 1)
+        self.assertEqual(result.generated_part_folder_count, 2)
+
+    def test_result_records_replaced_part_folders_separately_from_conflicts(self):
+        plan = self.plan({"a.pdf": 600, "b.pdf": 600}, max_size_mb=1 / 1024)
+        conflicting = self.folders.destination / PART_ONE
+        conflicting.mkdir()
+        (conflicting / "stale.pdf").write_bytes(b"old")
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertEqual(
+            [folder.name for folder in result.replaced_part_folders], [PART_ONE]
+        )
+        self.assertEqual(
+            [folder.path for folder in result.replaced_part_folders], [conflicting]
+        )
+        self.assertIsInstance(result.replaced_part_folders[0], ReplacedPartFolder)
+        self.assertEqual(
+            [(conflict.kind, conflict.name) for conflict in result.output_conflicts],
+            [("part_folder", PART_ONE)],
+        )
+
+    def test_replace_confirmation_recreates_case_different_existing_part_folder(self):
+        plan = self.plan({"alpha.pdf": 10})
+        existing = self.folders.destination / PART_ONE.lower()
+        existing.mkdir()
+        (existing / "stale.pdf").write_bytes(b"old")
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertEqual(
+            [item.name for item in self.folders.destination.iterdir()], [PART_ONE]
+        )
+        self.assertEqual(
+            sorted(item.name for item in (self.folders.destination / PART_ONE).iterdir()),
+            ["alpha.pdf"],
+        )
+        self.assertEqual(
+            [folder.name for folder in result.replaced_part_folders], [PART_ONE]
+        )
+
+    def test_cancelled_result_has_no_replacements_or_copy_failures(self):
+        plan = self.plan({"alpha.pdf": 10})
+        (self.folders.destination / PART_ONE).mkdir()
+
+        cancelled = generate_output(plan)
+        completed = generate_output(plan, replace_existing=True)
+
+        self.assertTrue(cancelled.cancelled)
+        self.assertEqual(cancelled.replaced_part_folders, ())
+        self.assertEqual(cancelled.copy_failures, ())
+        self.assertFalse(completed.cancelled)
+        self.assertEqual(
+            [folder.name for folder in completed.replaced_part_folders], [PART_ONE]
+        )
+        self.assertEqual(completed.copy_failures, ())
+
+    def test_completed_run_with_failures_is_not_cancelled(self):
+        plan = self.plan({"alpha.pdf": 10, "beta.pdf": 20})
+        (self.folders.source / "beta.pdf").unlink()
+
+        result = generate_output(plan)
+
+        self.assertFalse(result.cancelled)
+        self.assertEqual([failure.filename for failure in result.copy_failures], ["beta.pdf"])
+        self.assertEqual(result.copied_pdf_count, 1)
+        self.assertEqual(result.generated_part_folder_count, 1)
+
+    def test_replaced_folder_and_copy_failure_are_immutable_and_public(self):
+        plan = self.plan({"alpha.pdf": 600, "beta.pdf": 600}, max_size_mb=1 / 1024)
+        (self.folders.destination / PART_ONE).mkdir()
+        (self.folders.source / "alpha.pdf").unlink()
+
+        result = generate_output(plan, replace_existing=True)
+
+        self.assertIsInstance(result.replaced_part_folders[0], ReplacedPartFolder)
+        self.assertIsInstance(result.copy_failures[0], CopyFailure)
+        with self.assertRaises(FrozenInstanceError):
+            result.replaced_part_folders[0].name = "OTHER"
+        with self.assertRaises(FrozenInstanceError):
+            result.copy_failures[0].filename = "OTHER"
+        with self.assertRaises(FrozenInstanceError):
+            result.copy_failures[0].reason = "OTHER"
 
     def test_result_and_generated_part_folders_are_immutable_and_public(self):
         plan = self.plan({"alpha.pdf": 10})

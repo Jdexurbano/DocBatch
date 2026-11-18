@@ -3,15 +3,19 @@ from pathlib import Path
 
 from docbatch.models import (
     BatchPlan,
+    CopyFailure,
     GeneratedPartFolder,
     GenerationResult,
     OutputConflict,
+    ReplacedPartFolder,
 )
 
 __all__ = [
+    "CopyFailure",
     "GeneratedPartFolder",
     "GenerationResult",
     "OutputConflict",
+    "ReplacedPartFolder",
     "detect_conflicts",
     "generate_output",
 ]
@@ -73,25 +77,54 @@ def detect_conflicts(plan: BatchPlan) -> tuple[OutputConflict, ...]:
     return tuple(conflicts)
 
 
+def _remove_entry(entry: Path) -> None:
+    if entry.is_dir() and not entry.is_symlink():
+        shutil.rmtree(entry)
+    else:
+        entry.unlink()
+
+
 def generate_output(plan: BatchPlan, replace_existing: bool = False) -> GenerationResult:
     conflicts = detect_conflicts(plan)
-    if conflicts:
-        if replace_existing:
-            raise NotImplementedError("Replace confirmation is not available yet")
+    if conflicts and not replace_existing:
         return GenerationResult(
             cancelled=True,
             generated_part_folders=(),
             copied_pdf_count=0,
             generated_part_folder_count=0,
             output_conflicts=conflicts,
+            replaced_part_folders=(),
+            copy_failures=(),
         )
 
+    replaced_part_folders = []
+    if conflicts:
+        destination_entries = _entries_by_casefold(plan.destination)
+        conflicted_parts = {
+            conflict.name for conflict in conflicts if conflict.kind == "part_folder"
+        }
+        for part in plan.part_folders:
+            if part.name not in conflicted_parts:
+                continue
+            for entry in destination_entries.get(part.name.casefold(), ()):
+                _remove_entry(entry)
+            replaced_part_folders.append(
+                ReplacedPartFolder(name=part.name, path=part.path)
+            )
+
     generated_part_folders = []
+    copy_failures = []
     copied_pdf_count = 0
     for part in plan.part_folders:
         part.path.mkdir()
         for pdf in part.pdfs:
-            shutil.copy2(plan.source / pdf.filename, part.path / pdf.filename)
+            try:
+                shutil.copy2(plan.source / pdf.filename, part.path / pdf.filename)
+            except OSError as exc:
+                copy_failures.append(
+                    CopyFailure(filename=pdf.filename, reason=str(exc))
+                )
+                continue
             copied_pdf_count += 1
         generated_part_folders.append(
             GeneratedPartFolder(
@@ -107,5 +140,7 @@ def generate_output(plan: BatchPlan, replace_existing: bool = False) -> Generati
         generated_part_folders=tuple(generated_part_folders),
         copied_pdf_count=copied_pdf_count,
         generated_part_folder_count=len(generated_part_folders),
-        output_conflicts=(),
+        output_conflicts=conflicts,
+        replaced_part_folders=tuple(replaced_part_folders),
+        copy_failures=tuple(copy_failures),
     )

@@ -24,3 +24,28 @@ class BatchPlan:
     destination: Path
     max_size_bytes: int
     part_folders: tuple[PartFolder, ...]
+
+
+@dataclass(frozen=True)
+class OutputConflict:
+    kind: str
+    path: Path
+    name: str
+    message: str
+
+
+@dataclass(frozen=True)
+class GeneratedPartFolder:
+    name: str
+    path: Path
+    total_size_bytes: int
+    has_oversized_pdf: bool
+
+
+@dataclass(frozen=True)
+class GenerationResult:
+    cancelled: bool
+    generated_part_folders: tuple[GeneratedPartFolder, ...]
+    copied_pdf_count: int
+    generated_part_folder_count: int
+    output_conflicts: tuple[OutputConflict, ...]

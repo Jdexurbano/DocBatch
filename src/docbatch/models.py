@@ -43,9 +43,23 @@ class GeneratedPartFolder:
 
 
 @dataclass(frozen=True)
+class CopyFailure:
+    filename: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class ReplacedPartFolder:
+    name: str
+    path: Path
+
+
+@dataclass(frozen=True)
 class GenerationResult:
     cancelled: bool
     generated_part_folders: tuple[GeneratedPartFolder, ...]
     copied_pdf_count: int
     generated_part_folder_count: int
     output_conflicts: tuple[OutputConflict, ...]
+    replaced_part_folders: tuple[ReplacedPartFolder, ...]
+    copy_failures: tuple[CopyFailure, ...]
